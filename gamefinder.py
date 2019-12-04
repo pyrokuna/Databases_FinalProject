@@ -30,7 +30,6 @@ if len(sys.argv) > 1 and sys.argv[1] == "-adm":
         menu()
         menu_choice = input("lollipopDB/menu choice> ")
         if menu_choice == "I" or menu_choice == "i":
-            
             title = input("Enter a title of a video game: ")
             descr = input("Enter a small game description(<255char): ")
             year = int(input("Enter the game's release year: "))
@@ -125,25 +124,25 @@ def confirm_register():
     confirm_username = username.get()
     confirm_pass = password.get()
 
-    # ensures that the registering user gives a password
+    # ensures that the registering user gives a password and username
     if len(confirm_pass) == 0 or len(confirm_username) == 0:
         messagebox.showerror("Error", "Must enter a username AND password.")
         erase_username.delete(0, tk.END)
         erase_pass.delete(0, tk.END)
         return
-    # if e-mail already being used, don't allow creation of profile
-    # ADD CODE HERE
-    # test that the given username is in the correct format
-    elif not re.match(r"\S+@\S+\.\S+", confirm_username):
-        messagebox.showerror(
-            "Error",
-            "E-mail is not in correct format.\nmust be <name>@<website>.<domain>",
-        )
-        erase_username.delete(0, tk.END)
+    # if username already being used, don't allow creation of profile
+    db.my_cursor.execute(f'SELECT username FROM lollipopdb.user WHERE username = "{confirm_username}"')
+    res = db.my_cursor.fetchall()
+    if len(res) > 0:
+        messagebox.showerror("Error", "Username already exists in database, a unique username is required.")
+        erase_username.delete(0,tk.END)
         erase_pass.delete(0, tk.END)
         return
-
-    # LOGIC OF ACTUAL REGISTRATION: ADDING USER TO DB
+    # add user to DB
+    else:
+        db.my_cursor.execute(f'INSERT INTO user (username, password) VALUES ("{confirm_username}", "{confirm_pass}")')
+        db.mydb.commit()
+        register_screen.destroy()
 
 
 def register_window():
@@ -167,7 +166,7 @@ def register_window():
     # create buttons and entry objects for registration
     tk.Label(register_screen, text="Please enter details below").pack()
     tk.Label(register_screen, text="").pack()
-    tk.Label(register_screen, text="E-mail *").pack()
+    tk.Label(register_screen, text="Username *").pack()
     erase_username = tk.Entry(register_screen, textvariable=username)
     erase_username.pack()
     tk.Label(register_screen, text="Password *").pack()
@@ -189,17 +188,21 @@ def confirm_login():
     Login Logic Functions
     - takes care of the logic of the login function
     """
+    global User
+    global Pass
     confirm_username = username_login.get()
     confirm_password = password_login.get()
 
     # ensure the account exists
-    if (
-        "<some logic>"
-    ):  ################################################################################
+    db.my_cursor.execute(f'SELECT username FROM lollipopdb.user WHERE username = "{confirm_username}"')
+    res = db.my_cursor.fetchall()
+    if len(res) > 0:
         # if login is successful, move onto the main window design function
-        if (
-            "test_pass" == confirm_password
-        ):  ###########################################################
+        db.my_cursor.execute(f'SELECT * FROM lollipopdb.user WHERE (username = "{confirm_username}" AND password = "{confirm_password}")')
+        res = db.my_cursor.fetchall()
+        if len(res) > 0:
+            User = confirm_username
+            Pass = confirm_password
             login_screen.destroy()
             origin_screen.destroy()
             main_window()
@@ -237,7 +240,7 @@ def login_window():
     # creat login screen buttons and entry objects that accept strings
     tk.Label(login_screen, text="Please enter details below").pack()
     tk.Label(login_screen, text="").pack()
-    tk.Label(login_screen, text="E-mail *").pack()
+    tk.Label(login_screen, text="Username *").pack()
     username_entry = tk.Entry(login_screen, textvariable=username_login)
     username_entry.pack()
     tk.Label(login_screen, text="").pack()
@@ -251,18 +254,116 @@ def login_window():
     ).pack()
 
 
-def delete_item():
-    """
-    Delete amazon item
-    """
-    print("Probably gone")
+def add():
+    add_record = listbox.get(listbox.curselection())
+    if len(add_record) == 0:
+        messagebox.showwarning("Warning", "You must select a record to favorite.")
+    add_record = add_record[0]
 
+    # linking the user to the favorite selection
+    #  extracting game_id
+    db.my_cursor.execute(f'SELECT game_id FROM lollipopdb.games WHERE title = "{add_record}"')
+    gameID = db.my_cursor.fetchone()
+    gameID = int(gameID[0])
+    db.my_cursor.execute(f'SELECT title FROM lollipopdb.games INNER JOIN favorites ON (games.game_id = favorites.game_id) INNER JOIN user ON (user.username = favorites.username) WHERE title = "{add_record}" AND favorites.username = "{User}"')
+    res = db.my_cursor.fetchall()
+    if len(res) == 0:
+        #  linking user to game(s)
+        db.my_cursor.execute( f'INSERT INTO favorites (username, game_id) VALUES ("{User}",{gameID})')
+        db.mydb.commit()
+    else:
+        messagebox.showerror("Error", "The game selected is already in your favorites.")
 
-def add_item():
-    """
-    Add an amazon item
-    """
-    print("Probably gone")
+def remove():
+    rem_record = listbox.get(listbox.curselection())
+    if len(rem_record) == 0:
+        messagebox.showwarning("Warning", "You must select a record to favorite.")
+    rem_record = rem_record[0]
+    
+    # check if item exists in the favorites table
+    db.my_cursor.execute(f'SELECT title FROM lollipopdb.games INNER JOIN favorites ON (games.game_id = favorites.game_id) INNER JOIN user ON (user.username = favorites.username) WHERE title = "{rem_record}" AND favorites.username = "{User}"')
+    res = db.my_cursor.fetchall()
+    if len(res) > 0:
+        db.my_cursor.execute(f'SELECT game_id FROM lollipopdb.games WHERE title = "{rem_record}"')
+        gameID = db.my_cursor.fetchone()
+        gameID = int(gameID[0])
+        db.my_cursor.execute(f'DELETE FROM lollipopdb.favorites WHERE game_id = {gameID} AND username = "{User}"')
+    else:
+        messagebox.showerror("Error", "The game selected is not in your favorites.")
+    db.mydb.commit()
+
+    listbox.delete(0, tk.END)
+    db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN favorites ON (games.game_id = favorites.game_id) INNER JOIN user ON (user.username = favorites.username) WHERE user.username = "{User}"')
+    res = db.my_cursor.fetchall()
+    for x in res:
+        listbox.insert(tk.END, x)
+
+def show_fav():
+    listbox.delete(0, tk.END)
+    db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN favorites ON (games.game_id = favorites.game_id) INNER JOIN user ON (user.username = favorites.username) WHERE user.username = "{User}"')
+    res = db.my_cursor.fetchall()
+    for x in res:
+        listbox.insert(tk.END, x)
+
+def search():
+    rYear_en = rYear_entry.get()
+    genre_sel = genre_selected.get()
+    plat_sel = plat_selected.get()
+
+    rYear_enB = True
+    genre_selB = True
+    plat_selB = True
+
+    if len(rYear_en) == 0:
+        rYear_enB = False
+    if genre_sel == "None":
+        genre_selB = False
+    if plat_sel == "None":
+        plat_selB = False
+
+    # if all search parameters are empty give warning
+    if not rYear_enB and not genre_selB and not plat_selB:
+        messagebox.showinfo("Attention", "You must use at least one of the parameters to get a good search.")
+    # if not query
+    else:
+        # delete everything in the listbox
+        listbox.delete(0, tk.END)
+        # query kinds based on how many fields are filled in
+        if rYear_enB and not genre_selB and not plat_selB:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games WHERE release_year = {rYear_en}')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
+        elif not rYear_enB and genre_selB and not plat_selB:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN gamegenre ON (games.game_id = gamegenre.game_id) INNER JOIN genre ON (genre.genre_id = gamegenre.genre_id) WHERE genre.genre_name = "{genre_sel}"')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
+        elif not rYear_enB and not genre_selB and plat_selB:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN gameplatform ON (games.game_id = gameplatform.game_id) INNER JOIN platform ON (platform.plat_id = gameplatform.plat_id) WHERE platform.plat_name = "{plat_sel}"')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
+        elif rYear_enB and genre_selB and not plat_selB:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN gamegenre ON (games.game_id = gamegenre.game_id) INNER JOIN genre ON (genre.genre_id = gamegenre.genre_id) WHERE genre.genre_name = "{genre_sel}" AND release_year = {rYear_en}')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
+        elif rYear_enB and not genre_selB and plat_selB:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN gameplatform ON (games.game_id = gameplatform.game_id) INNER JOIN platform ON (platform.plat_id = gameplatform.plat_id) WHERE platform.plat_name = "{plat_sel}" AND release_year = {rYear_en}')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
+        elif not rYear_enB and genre_selB and plat_selB:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN gameplatform ON (games.game_id = gameplatform.game_id) INNER JOIN platform ON (platform.plat_id = gameplatform.plat_id) INNER JOIN gamegenre ON (games.game_id = gamegenre.game_id) INNER JOIN genre ON (genre.genre_id = gamegenre.genre_id) WHERE platform.plat_name = "{plat_sel}" AND genre.genre_name = "{genre_sel}"')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
+        else:
+            db.my_cursor.execute(f'SELECT title, release_year, description FROM lollipopdb.games INNER JOIN gameplatform ON (games.game_id = gameplatform.game_id) INNER JOIN platform ON (platform.plat_id = gameplatform.plat_id) INNER JOIN gamegenre ON (games.game_id = gamegenre.game_id) INNER JOIN genre ON (genre.genre_id = gamegenre.genre_id) WHERE platform.plat_name = "{plat_sel}" AND genre.genre_name = "{genre_sel}" AND release_year = {rYear_en}')
+            res = db.my_cursor.fetchall()
+            for x in res:
+                listbox.insert(tk.END, x)
 
 
 def main_window():
@@ -272,20 +373,16 @@ def main_window():
     """
     # item variables
     global main_screen
-    global item_url
-    global item_desired_price
     global listbox
-    global url_entry
-    global desired_price_entry
+    global rYear_entry
+    global genre_selected
+    global plat_selected
 
     # create essential pieces/geometry of the window
     main_screen = tk.Tk()
     main_screen.geometry("1200x675")
     # main_screen.resizable(width=False, height=False)
-    main_screen.title("Price Drop Notification")
-
-    item_url = tk.StringVar()
-    item_desired_price = tk.StringVar()
+    main_screen.title("GameFinder")
 
     # making the background of the window and the line to split up the sides
     left_frame = tk.Frame(main_screen, bg="beige", width=598, height=675)
@@ -296,39 +393,75 @@ def main_window():
     right_frame.place(x=602, y=0)
 
     # creating the widgets for the left frame
+    # release year entry section
+    rYear_entry = tk.StringVar()
     tk.Label(
-        left_frame, text="URL of Desired Item", bg="beige", font=("Calibri", 16)
-    ).place(x=299 - 95, y=180)
-    url_entry = tk.Entry(left_frame, textvariable=item_url)
-    url_entry.place(x=299 - 70, y=210)
+        left_frame, text="Parameters for Search:", bg="beige", font=("Calibri", 18)
+    ).place(x=299 - 125, y=0)
     tk.Label(
-        left_frame,
-        text="Desired Price of Desired Item",
-        bg="beige",
-        font=("Calibri", 16),
-    ).place(x=299 - 135, y=260)
-    desired_price_entry = tk.Entry(left_frame, textvariable=item_desired_price)
-    desired_price_entry.place(x=299 - 70, y=290)
-    # goto add_item
-    tk.Button(left_frame, text="Add", height="2", width="30", command=add_item).place(
-        x=299 - 115, y=320
+        left_frame, text="Release Year", bg="beige", font=("Calibri", 16)
+    ).place(x=299 - 70, y=100)
+    ry_entry = tk.Entry(left_frame, textvariable=rYear_entry)
+    ry_entry.place(x=299 - 75, y=150)
+    
+    # Genre drop down menu section
+    tk.Label(
+        left_frame, text="Genre", bg="beige", font=("Calibri", 16)
+    ).place(x=299 - 40, y=200)
+    # drop down menu for genre
+    db.my_cursor.execute('SELECT genre_name FROM lollipopdb.genre')
+    gres = db.my_cursor.fetchall()
+    gen_list = []
+    gen_list.append("None")
+    for i, x in enumerate(gres):
+        gen_list.append(gres[i][0])
+    genre_selected = tk.StringVar()
+    genre_selected.set("None")
+
+    tk.OptionMenu(left_frame, genre_selected, *gen_list).place(x=299 - 47, y=250)
+
+    # Platform drop down menu section
+    tk.Label(
+        left_frame, text="Platform", bg="beige", font=("Calibri", 16)
+    ).place(x=299 - 50, y=300)
+    # drop down menu for genre
+    db.my_cursor.execute('SELECT plat_name FROM lollipopdb.platform')
+    pres = db.my_cursor.fetchall()
+    plat_list = []
+    plat_list.append("None")
+    for i, x in enumerate(pres):
+        plat_list.append(pres[i][0])
+    plat_selected = tk.StringVar()
+    plat_selected.set("None")
+
+    tk.OptionMenu(left_frame, plat_selected, *plat_list).place(x=299 - 47, y=350)
+
+    # goto search
+    tk.Button(left_frame, text="Search", height="2", width="30", command=search).place(
+        x=299 - 115, y=420
     )
 
     # creating widgets for the right frame
     tk.Label(
         right_frame,
-        text="Items You Are Currently Watching",
+        text="List of Games in the DB",
         bg="beige",
         font=("Calibri", 16),
-    ).place(x=299 - 130, y=50)
-    listbox = tk.Listbox(right_frame, width=50, height=30)
-    listbox.place(x=299 - 135, y=80)
+    ).place(x=299 - 90, y=0)
+    listbox = tk.Listbox(right_frame, width=92, height=36)
+    listbox.place(x=299 - 280, y=30)
     tk.Button(
-        right_frame, text="Delete Item", height="2", width="30", command=delete_item
-    ).place(x=299 - 95, y=570)
+        right_frame, text="Add to Favorites", height="2", width="24", command=add
+    ).place(x=299 - 280, y=625)
+    tk.Button(
+        right_frame, text="Remove from Favorites", height="2", width="24", command=remove
+    ).place(x=299 - 92, y=625)
+    tk.Button(
+        right_frame, text="Show Favorites", height="2", width="24", command=show_fav
+    ).place(x=299 + 95, y=625)
 
     # FOR TESTING:
-    # main_screen.mainloop()
+    main_screen.mainloop()
 
 
 def start_screen():
@@ -343,6 +476,7 @@ def start_screen():
     origin_screen = tk.Tk()
     origin_screen.geometry("900x506")
     origin_screen.title("Login if you have an account or Register if you don't")
+    origin_screen.resizable(height=None, width=None)
 
     # Buttons and Labels added to screen
     tk.Label(
@@ -364,7 +498,8 @@ def start_screen():
     origin_screen.mainloop()
 
 
-#start_screen()
+start_screen()
+#main_window()
 
 # close the connection to the database
 db.mydb.close()

@@ -81,6 +81,6 @@ my_cursor.execute("CREATE TABLE IF NOT EXISTS Favorites ("
 #    'INSERT INTO GamePlatform (game_id, plat_id) VALUES (1,7)'
 #)
 
-#my_cursor.execute('DELETE FROM platform')
+#my_cursor.execute('DELETE FROM user')
 
 mydb.commit()
