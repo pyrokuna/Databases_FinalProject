@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
 import re
+import db   # importing our own module
+import sys
 
 """
 Ryan Gutierrez
@@ -11,7 +13,110 @@ NOT3!!!! Help from the following:
     https://www.youtube.com/watch?v=Xt6SqWuMSA8
 """
 
+def menu():
+    """
+    Print Menu for "admin"
+    """
+    print("------- Admin Menu -------")
+    print("I: insert a record")
+    print("U: update a record")
+    print("D: delete a record")
+    print("Q: exit\n")
 
+# Running the program as "admin" in the command prompt to access inserting, updating, and deleting records
+# because we don't want users to have access to change the core database, only their favorites list
+if len(sys.argv) > 1 and sys.argv[1] == "-adm":
+    while True:
+        menu()
+        menu_choice = input("lollipopDB/menu choice> ")
+        if menu_choice == "I" or menu_choice == "i":
+            
+            title = input("Enter a title of a video game: ")
+            descr = input("Enter a small game description(<255char): ")
+            year = int(input("Enter the game's release year: "))
+            db.my_cursor.execute(
+                f'INSERT INTO Games (title, description, release_year) VALUES ("{title}", "{descr}", {year})'
+            )
+            db.mydb.commit()
+
+            genres = input("Enter the genre(s) in a comma seperated list: ")
+            genres = genres.split(', ')
+            for x in genres:
+                db.my_cursor.execute(f'SELECT genre_name FROM lollipopdb.genre WHERE genre_name = "{x}"')
+                res = db.my_cursor.fetchall()
+                if len(res) == 0:
+                    # add to database
+                    db.my_cursor.execute(f'INSERT INTO Genre (genre_name) VALUES ("{x}")')
+                    db.mydb.commit()
+                # linking the genre to the game previously input
+                #  extracting game_id
+                db.my_cursor.execute(f'SELECT game_id FROM lollipopdb.games WHERE title = "{title}"')
+                gameID = db.my_cursor.fetchone()
+                gameID = int(gameID[0])
+                #  extracting genre_id
+                db.my_cursor.execute(f'SELECT genre_id FROM lollipopdb.genre WHERE genre_name = "{x}"')
+                genreID = db.my_cursor.fetchone()
+                genreID = int(genreID[0])
+                #  linking genre(s) to game
+                db.my_cursor.execute( f'INSERT INTO GameGenre (game_id, genre_id) VALUES ({gameID},{genreID})')  
+
+            platforms = input("Enter the platform(s) in a comma seperated list: ")
+            platforms = platforms.split(', ')
+            for x in platforms:
+                db.my_cursor.execute(f'SELECT plat_name FROM lollipopdb.platform WHERE plat_name = "{x}"')
+                res = db.my_cursor.fetchall()
+                if len(res) == 0:
+                    # add to database
+                    db.my_cursor.execute(f'INSERT INTO platform (plat_name) VALUES ("{x}")')
+                    db.mydb.commit()
+                # linking the platform to the game previously input
+                #  extracting game_id
+                db.my_cursor.execute(f'SELECT game_id FROM lollipopdb.games WHERE title = "{title}"')
+                gameID = db.my_cursor.fetchone()
+                gameID = int(gameID[0])
+                #  extracting platform_id
+                db.my_cursor.execute(f'SELECT plat_id FROM lollipopdb.platform WHERE plat_name = "{x}"')
+                platID = db.my_cursor.fetchone()
+                platID = int(platID[0])
+                #  linking platform(s) to game
+                db.my_cursor.execute( f'INSERT INTO gameplatform (game_id, plat_id) VALUES ({gameID},{platID})')
+
+            db.mydb.commit()
+        elif menu_choice == "U" or menu_choice == "u":
+            title = input("Title of game you would like to update: ")
+            # check if game with title exists in DB
+            db.my_cursor.execute(f'SELECT title FROM lollipopdb.games WHERE title = "{title}"')
+            res = db.my_cursor.fetchall()
+            if len(res) > 0:
+                up_param = input("Update (T)itle, (D)escription, or (Y)ear: ")
+                if up_param == "t" or up_param == "T":
+                    new_param = input("Updated title: ")
+                    db.my_cursor.execute(f'UPDATE lollipopdb.games SET title = "{new_param}" WHERE title = "{title}"')
+                if up_param == "d" or up_param == "D":
+                    new_param = input("Updated description: ")
+                    db.my_cursor.execute(f'UPDATE lollipopdb.games SET description = "{new_param}" WHERE title = "{title}"')
+                if up_param == "y" or up_param == "Y":
+                    new_param = int(input("Updated year: "))
+                    db.my_cursor.execute(f'UPDATE lollipopdb.games SET release_year = {new_param} WHERE title = "{title}"')
+                db.mydb.commit()
+            # case where no game with given title exists in DB
+            else:
+                print("**ERROR: No game of the given title exists in the database.")
+        elif menu_choice == "D" or menu_choice == "d":
+            title = input("Title of game you would like to delete: ")
+            # check if game with title exists in DB
+            db.my_cursor.execute(f'SELECT title FROM lollipopdb.games WHERE title = "{title}"')
+            res = db.my_cursor.fetchall()
+            if len(res) > 0:
+                db.my_cursor.execute(f'DELETE FROM lollipopdb.games WHERE title = "{title}"')
+            else:
+                print("**ERROR: No game of the given title exists in the database.")
+            db.mydb.commit()
+        elif menu_choice == "Q" or menu_choice == "q":
+            exit()
+
+
+# ---------------------------------- Start of GUI/user section ----------------------------------
 def confirm_register():
     """
     Logic of what registration does
@@ -259,4 +364,7 @@ def start_screen():
     origin_screen.mainloop()
 
 
-start_screen()
+#start_screen()
+
+# close the connection to the database
+db.mydb.close()

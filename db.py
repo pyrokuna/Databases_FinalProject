@@ -84,6 +84,3 @@ my_cursor.execute("CREATE TABLE IF NOT EXISTS Favorites ("
 #my_cursor.execute('DELETE FROM platform')
 
 mydb.commit()
-
-# close the connection to the database
-mydb.close()
